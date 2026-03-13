@@ -19,6 +19,72 @@ from contract_generator import generate_contract
 
 load_dotenv()
 
+# ─── Login ─────────────────────────────────────────────────────────────────────
+
+def _get_users() -> dict:
+    """
+    Lê usuários da env var APP_USERS no formato:  nome:senha,nome2:senha2
+    Fallback: APP_PASSWORD cria um usuário genérico 'admin'.
+    """
+    raw = os.getenv("APP_USERS", "").strip()
+    if raw:
+        users = {}
+        for pair in raw.split(","):
+            pair = pair.strip()
+            if ":" in pair:
+                u, p = pair.split(":", 1)
+                users[u.strip()] = p.strip()
+        if users:
+            return users
+
+    password = os.getenv("APP_PASSWORD", "").strip()
+    if password:
+        return {"admin": password}
+
+    return {}
+
+
+def show_login() -> bool:
+    """
+    Exibe a tela de login. Retorna True se autenticado, False caso contrário.
+    Gerencia estado em st.session_state['authenticated'].
+    """
+    if st.session_state.get("authenticated"):
+        return True
+
+    # ── layout centralizado ──
+    _, col, _ = st.columns([1, 1.4, 1])
+    with col:
+        st.markdown("<br><br>", unsafe_allow_html=True)
+        st.markdown(
+            "<h2 style='text-align:center;'>📋 Assistente Contratual</h2>"
+            "<p style='text-align:center; color:gray;'>Grupo Raiz Educação</p>",
+            unsafe_allow_html=True,
+        )
+        st.markdown("<br>", unsafe_allow_html=True)
+
+        with st.form("login_form"):
+            username = st.text_input("Usuário", placeholder="seu usuário")
+            password = st.text_input("Senha", type="password", placeholder="••••••••")
+            submitted = st.form_submit_button("Entrar", use_container_width=True)
+
+        if submitted:
+            users = _get_users()
+            if not users:
+                st.error(
+                    "Nenhum usuário configurado. "
+                    "Defina APP_USERS ou APP_PASSWORD nas variáveis de ambiente."
+                )
+            elif username in users and users[username] == password:
+                st.session_state["authenticated"] = True
+                st.session_state["logged_user"] = username
+                st.rerun()
+            else:
+                st.error("Usuário ou senha incorretos.")
+
+    return False
+
+
 # ─── Paths ─────────────────────────────────────────────────────────────────────
 DATA_DIR = Path(__file__).parent / "data"
 TEMPLATE_PATH = DATA_DIR / "contrato_template.docx"
@@ -252,12 +318,25 @@ st.set_page_config(
     layout="centered",
 )
 
+# ── Autenticação ── deve vir antes de qualquer conteúdo ──
+if not show_login():
+    st.stop()
+
 st.title("📋 Assistente Contratual Raiz")
 st.caption("Geração e revisão de contratos PJ · Grupo Raiz Educação")
 
 # Sidebar
 with st.sidebar:
     st.header("⚙️ Configuração")
+
+    # Logout
+    user = st.session_state.get("logged_user", "")
+    st.markdown(f"👤 **{user}**")
+    if st.button("Sair", use_container_width=True):
+        for key in list(st.session_state.keys()):
+            del st.session_state[key]
+        st.rerun()
+    st.divider()
 
     api_key = os.getenv("GEMINI_API_KEY", "")
     if not api_key:
