@@ -200,6 +200,13 @@ Data de hoje: {dia} de {mes} de {ano}
 - Assume que o usuário pode não conhecer o padrão Raiz: explica desvios, orienta e propõe correções.
 - Trabalha sempre com confirmação por etapa antes de avançar.
 
+## LEITURA DE IMAGENS
+- O usuário pode enviar imagens (fotos de contratos, documentos, cartões CNPJ, comprovantes etc.).
+- Ao receber uma imagem, extraia TODOS os dados relevantes visíveis (razão social, CNPJ, CPF, endereço, nome, valores, datas, atividades, etc.).
+- Use os dados extraídos para preencher automaticamente as etapas do fluxo de geração.
+- Apresente os dados extraídos de forma organizada e peça confirmação antes de avançar.
+- Se algum dado estiver ilegível ou ausente na imagem, informe claramente e peça ao usuário para complementar.
+
 ## MODOS DE ATUAÇÃO
 **A) GERAÇÃO** — gera o contrato do zero seguindo as etapas abaixo.
 **B) REVISÃO/QA** — revisa contrato existente (texto colado ou .docx), lista apontamentos por prioridade: Crítico / Importante / Estético. Não reabre decisões já aprovadas, salvo risco jurídico evidente.
@@ -339,20 +346,6 @@ with st.sidebar:
         st.rerun()
     st.divider()
 
-    api_key = os.getenv("OPENAI_API_KEY", "")
-    if not api_key:
-        api_key = st.text_input(
-            "OpenAI API Key",
-            type="password",
-            placeholder="sk-...",
-            help="Obtenha em https://platform.openai.com/api-keys",
-        )
-        if api_key:
-            st.success("✅ API Key configurada!")
-    else:
-        st.success("✅ API Key carregada do ambiente")
-
-    st.divider()
     st.header("📌 Modo")
     mode = st.radio(
         "Selecione o modo de operação:",
@@ -369,8 +362,7 @@ with st.sidebar:
     st.divider()
     st.caption(
         f"**Modelo:** {OPENAI_MODEL}\n\n"
-        "**Suporta:** texto e imagens\n\n"
-        "Consulte seus limites em platform.openai.com"
+        "**Suporta:** texto e imagens"
     )
 
 # Load data
@@ -416,54 +408,49 @@ if not st.session_state.messages:
                 "Vou guiá-lo(a) passo a passo na geração de um contrato PJ padrão Raiz.\n\n"
                 "Para começar: **qual é a marca da CONTRATANTE?**\n\n"
                 "*(Ex.: HOLDING, QI, PRO RAIZ, CUBO GLOBAL, APOGEU...)*\n\n"
-                "💡 *Você pode enviar imagens usando o botão na barra lateral.*"
+                "💡 *Você pode anexar imagens (fotos de contratos, documentos) junto com sua mensagem.*"
             )
         else:
             welcome = (
                 "Olá! Sou o **Assistente Contratual Raiz** 👋\n\n"
                 "Modo **Revisão / QA** ativo.\n\n"
                 "Cole aqui o texto do contrato que deseja revisar, ou descreva o que precisa verificar.\n\n"
-                "💡 *Você pode enviar imagens de contratos para análise usando o botão na barra lateral.*"
+                "💡 *Você pode anexar imagens de contratos para análise junto com sua mensagem.*"
             )
         st.markdown(welcome)
 
-# Image uploader in sidebar
-with st.sidebar:
-    st.divider()
-    st.header("🖼️ Enviar Imagens")
-    uploaded_images = st.file_uploader(
-        "Anexe imagens para enviar junto com sua próxima mensagem",
-        type=["png", "jpg", "jpeg", "gif", "webp"],
-        accept_multiple_files=True,
-        key="image_uploader",
-    )
-    if uploaded_images:
-        st.caption(f"{len(uploaded_images)} imagem(ns) selecionada(s)")
+# ─── API key (loaded from environment, no user input needed) ──────────────────
+api_key = os.getenv("OPENAI_API_KEY", "")
 
-# Chat input
-if prompt := st.chat_input("Digite sua mensagem..."):
+# ─── Image uploader + Chat input ─────────────────────────────────────────────
+uploaded_images = st.file_uploader(
+    "📎 Anexar imagens",
+    type=["png", "jpg", "jpeg", "gif", "webp"],
+    accept_multiple_files=True,
+    key="image_uploader",
+    label_visibility="collapsed",
+)
+
+if uploaded_images:
+    cols = st.columns(min(len(uploaded_images), 4))
+    for i, img_file in enumerate(uploaded_images):
+        with cols[i % 4]:
+            st.image(img_file, caption=img_file.name, width=120)
+
+if prompt := st.chat_input("Digite sua mensagem (pode anexar imagens acima)..."):
     if not api_key:
-        st.error("⚠️ Configure a API Key da OpenAI na barra lateral para continuar.")
+        st.error("⚠️ API Key da OpenAI não configurada. Defina OPENAI_API_KEY nas variáveis de ambiente.")
         st.stop()
 
     # Process uploaded images
     image_contents = []
     if uploaded_images:
         for img_file in uploaded_images:
-            img_bytes = img_file.read()
+            img_bytes = img_file.getvalue()
             b64 = base64.b64encode(img_bytes).decode("utf-8")
             ext = img_file.name.rsplit(".", 1)[-1].lower()
             mime = f"image/{'jpeg' if ext in ('jpg', 'jpeg') else ext}"
             image_contents.append({"b64": b64, "mime": mime, "name": img_file.name})
-
-    # Build user display content
-    display_parts = []
-    if image_contents:
-        for img in image_contents:
-            display_parts.append(f"📎 *{img['name']}*")
-    if prompt:
-        display_parts.append(prompt)
-    display_text = "\n\n".join(display_parts)
 
     # Append to UI messages
     st.session_state.messages.append({
@@ -560,6 +547,5 @@ if prompt := st.chat_input("Digite sua mensagem..."):
                 error_msg = f"❌ Erro na comunicação com a OpenAI: {str(e)}"
                 st.error(error_msg)
                 st.info(
-                    "Verifique se a API Key está correta e se você tem cota disponível. "
-                    "Gerencie sua chave em: https://platform.openai.com/api-keys"
+                    "Verifique se a API Key está correta e se você tem cota disponível."
                 )
