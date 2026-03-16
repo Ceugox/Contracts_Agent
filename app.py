@@ -1,18 +1,19 @@
 """
 Assistente Contratual Raiz
-Gera e revisa contratos PJ do Grupo Raiz Educação — powered by Google Gemini (free tier)
+Gera e revisa contratos PJ do Grupo Raiz Educação — powered by OpenAI
 """
 
 import os
 import csv
 import json
 import re
+import base64
 from io import BytesIO
 from datetime import datetime
 from pathlib import Path
 
 import streamlit as st
-import google.generativeai as genai
+from openai import OpenAI
 from dotenv import load_dotenv
 
 from contract_generator import generate_contract
@@ -91,7 +92,7 @@ TEMPLATE_PATH = DATA_DIR / "contrato_template.docx"
 MARCAS_CSV = DATA_DIR / "marcas.csv"
 BENEFICIOS_CSV = DATA_DIR / "beneficios.csv"
 
-GEMINI_MODEL = "gemini-2.5-flash"
+OPENAI_MODEL = "gpt-4o"
 
 # ─── Data loaders ──────────────────────────────────────────────────────────────
 
@@ -338,13 +339,13 @@ with st.sidebar:
         st.rerun()
     st.divider()
 
-    api_key = os.getenv("GEMINI_API_KEY", "")
+    api_key = os.getenv("OPENAI_API_KEY", "")
     if not api_key:
         api_key = st.text_input(
-            "Google Gemini API Key",
+            "OpenAI API Key",
             type="password",
-            placeholder="AIza...",
-            help="Obtenha gratuitamente em https://aistudio.google.com/app/apikey",
+            placeholder="sk-...",
+            help="Obtenha em https://platform.openai.com/api-keys",
         )
         if api_key:
             st.success("✅ API Key configurada!")
@@ -361,15 +362,15 @@ with st.sidebar:
 
     st.divider()
     if st.button("🔄 Nova Conversa", use_container_width=True):
-        for key in ["messages", "chat_session", "generated_contract"]:
+        for key in ["messages", "openai_messages", "generated_contract"]:
             st.session_state.pop(key, None)
         st.rerun()
 
     st.divider()
     st.caption(
-        "**Modelo:** gemini-1.5-flash (gratuito)\n\n"
-        "**Limite:** 1.500 req/dia · 15 req/min\n\n"
-        "Sem custos de API."
+        f"**Modelo:** {OPENAI_MODEL}\n\n"
+        "**Suporta:** texto e imagens\n\n"
+        "Consulte seus limites em platform.openai.com"
     )
 
 # Load data
@@ -380,8 +381,8 @@ system_prompt = build_system_prompt(brands, benefits)
 # Session state initialization
 if "messages" not in st.session_state:
     st.session_state.messages = []
-if "chat_session" not in st.session_state:
-    st.session_state.chat_session = None
+if "openai_messages" not in st.session_state:
+    st.session_state.openai_messages = []
 if "generated_contract" not in st.session_state:
     st.session_state.generated_contract = None
 
@@ -401,6 +402,9 @@ if st.session_state.generated_contract:
 # Display conversation history
 for msg in st.session_state.messages:
     with st.chat_message(msg["role"]):
+        if msg.get("images"):
+            for img_data in msg["images"]:
+                st.image(base64.b64decode(img_data["b64"]), caption=img_data["name"], width=300)
         st.markdown(msg["content"])
 
 # Show welcome message if empty
@@ -411,42 +415,102 @@ if not st.session_state.messages:
                 "Olá! Sou o **Assistente Contratual Raiz** 👋\n\n"
                 "Vou guiá-lo(a) passo a passo na geração de um contrato PJ padrão Raiz.\n\n"
                 "Para começar: **qual é a marca da CONTRATANTE?**\n\n"
-                "*(Ex.: HOLDING, QI, PRO RAIZ, CUBO GLOBAL, APOGEU...)*"
+                "*(Ex.: HOLDING, QI, PRO RAIZ, CUBO GLOBAL, APOGEU...)*\n\n"
+                "💡 *Você pode enviar imagens usando o botão na barra lateral.*"
             )
         else:
             welcome = (
                 "Olá! Sou o **Assistente Contratual Raiz** 👋\n\n"
                 "Modo **Revisão / QA** ativo.\n\n"
-                "Cole aqui o texto do contrato que deseja revisar, ou descreva o que precisa verificar."
+                "Cole aqui o texto do contrato que deseja revisar, ou descreva o que precisa verificar.\n\n"
+                "💡 *Você pode enviar imagens de contratos para análise usando o botão na barra lateral.*"
             )
         st.markdown(welcome)
+
+# Image uploader in sidebar
+with st.sidebar:
+    st.divider()
+    st.header("🖼️ Enviar Imagens")
+    uploaded_images = st.file_uploader(
+        "Anexe imagens para enviar junto com sua próxima mensagem",
+        type=["png", "jpg", "jpeg", "gif", "webp"],
+        accept_multiple_files=True,
+        key="image_uploader",
+    )
+    if uploaded_images:
+        st.caption(f"{len(uploaded_images)} imagem(ns) selecionada(s)")
 
 # Chat input
 if prompt := st.chat_input("Digite sua mensagem..."):
     if not api_key:
-        st.error("⚠️ Configure a API Key do Gemini na barra lateral para continuar.")
+        st.error("⚠️ Configure a API Key da OpenAI na barra lateral para continuar.")
         st.stop()
 
-    # Append user message
-    st.session_state.messages.append({"role": "user", "content": prompt})
+    # Process uploaded images
+    image_contents = []
+    if uploaded_images:
+        for img_file in uploaded_images:
+            img_bytes = img_file.read()
+            b64 = base64.b64encode(img_bytes).decode("utf-8")
+            ext = img_file.name.rsplit(".", 1)[-1].lower()
+            mime = f"image/{'jpeg' if ext in ('jpg', 'jpeg') else ext}"
+            image_contents.append({"b64": b64, "mime": mime, "name": img_file.name})
+
+    # Build user display content
+    display_parts = []
+    if image_contents:
+        for img in image_contents:
+            display_parts.append(f"📎 *{img['name']}*")
+    if prompt:
+        display_parts.append(prompt)
+    display_text = "\n\n".join(display_parts)
+
+    # Append to UI messages
+    st.session_state.messages.append({
+        "role": "user",
+        "content": prompt,
+        "images": [{"b64": img["b64"], "name": img["name"]} for img in image_contents] if image_contents else None,
+    })
     with st.chat_message("user"):
+        if image_contents:
+            for img in image_contents:
+                st.image(base64.b64decode(img["b64"]), caption=img["name"], width=300)
         st.markdown(prompt)
 
-    # Initialize Gemini chat session if needed
-    if not st.session_state.chat_session:
-        genai.configure(api_key=api_key)
-        model = genai.GenerativeModel(
-            model_name=GEMINI_MODEL,
-            system_instruction=system_prompt,
-        )
-        st.session_state.chat_session = model.start_chat(history=[])
+    # Build OpenAI message content (text + images)
+    if image_contents:
+        user_content = []
+        for img in image_contents:
+            user_content.append({
+                "type": "image_url",
+                "image_url": {"url": f"data:{img['mime']};base64,{img['b64']}"},
+            })
+        user_content.append({"type": "text", "text": prompt})
+    else:
+        user_content = prompt
+
+    st.session_state.openai_messages.append({"role": "user", "content": user_content})
 
     # Get AI response
+    client = OpenAI(api_key=api_key)
+
     with st.chat_message("assistant"):
         with st.spinner("Processando..."):
             try:
-                response = st.session_state.chat_session.send_message(prompt)
-                response_text = response.text
+                messages_for_api = [
+                    {"role": "system", "content": system_prompt},
+                ] + st.session_state.openai_messages
+
+                response = client.chat.completions.create(
+                    model=OPENAI_MODEL,
+                    messages=messages_for_api,
+                )
+                response_text = response.choices[0].message.content
+
+                # Append assistant message to OpenAI history
+                st.session_state.openai_messages.append(
+                    {"role": "assistant", "content": response_text}
+                )
 
                 # Check for contract generation trigger
                 match = re.search(
@@ -493,9 +557,9 @@ if prompt := st.chat_input("Digite sua mensagem..."):
                     )
 
             except Exception as e:
-                error_msg = f"❌ Erro na comunicação com o Gemini: {str(e)}"
+                error_msg = f"❌ Erro na comunicação com a OpenAI: {str(e)}"
                 st.error(error_msg)
                 st.info(
                     "Verifique se a API Key está correta e se você tem cota disponível. "
-                    "API Key gratuita: https://aistudio.google.com/app/apikey"
+                    "Gerencie sua chave em: https://platform.openai.com/api-keys"
                 )
