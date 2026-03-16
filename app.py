@@ -15,6 +15,8 @@ from pathlib import Path
 import streamlit as st
 from openai import OpenAI
 from dotenv import load_dotenv
+from PyPDF2 import PdfReader
+from docx import Document
 
 from contract_generator import generate_contract
 
@@ -397,6 +399,9 @@ for msg in st.session_state.messages:
         if msg.get("images"):
             for img_data in msg["images"]:
                 st.image(base64.b64decode(img_data["b64"]), caption=img_data["name"], width=300)
+        if msg.get("docs"):
+            for doc_name in msg["docs"]:
+                st.caption(f"📄 {doc_name}")
         st.markdown(msg["content"])
 
 # Show welcome message if empty
@@ -408,63 +413,103 @@ if not st.session_state.messages:
                 "Vou guiá-lo(a) passo a passo na geração de um contrato PJ padrão Raiz.\n\n"
                 "Para começar: **qual é a marca da CONTRATANTE?**\n\n"
                 "*(Ex.: HOLDING, QI, PRO RAIZ, CUBO GLOBAL, APOGEU...)*\n\n"
-                "💡 *Você pode anexar imagens (fotos de contratos, documentos) junto com sua mensagem.*"
+                "💡 *Você pode anexar imagens, PDFs ou DOCX junto com sua mensagem.*"
             )
         else:
             welcome = (
                 "Olá! Sou o **Assistente Contratual Raiz** 👋\n\n"
                 "Modo **Revisão / QA** ativo.\n\n"
                 "Cole aqui o texto do contrato que deseja revisar, ou descreva o que precisa verificar.\n\n"
-                "💡 *Você pode anexar imagens de contratos para análise junto com sua mensagem.*"
+                "💡 *Você pode anexar imagens, PDFs ou DOCX de contratos para análise.*"
             )
         st.markdown(welcome)
 
 # ─── API key (loaded from environment, no user input needed) ──────────────────
 api_key = os.getenv("OPENAI_API_KEY", "")
 
-# ─── Image uploader + Chat input ─────────────────────────────────────────────
-uploaded_images = st.file_uploader(
-    "📎 Anexar imagens",
-    type=["png", "jpg", "jpeg", "gif", "webp"],
+# ─── File uploader + Chat input ──────────────────────────────────────────────
+uploaded_files = st.file_uploader(
+    "📎 Anexar arquivos",
+    type=["png", "jpg", "jpeg", "gif", "webp", "pdf", "docx"],
     accept_multiple_files=True,
-    key="image_uploader",
+    key="file_uploader",
     label_visibility="collapsed",
 )
 
-if uploaded_images:
-    cols = st.columns(min(len(uploaded_images), 4))
-    for i, img_file in enumerate(uploaded_images):
-        with cols[i % 4]:
-            st.image(img_file, caption=img_file.name, width=120)
+if uploaded_files:
+    img_files = [f for f in uploaded_files if f.name.rsplit(".", 1)[-1].lower() in ("png", "jpg", "jpeg", "gif", "webp")]
+    doc_files = [f for f in uploaded_files if f.name.rsplit(".", 1)[-1].lower() in ("pdf", "docx")]
+    if img_files:
+        cols = st.columns(min(len(img_files), 4))
+        for i, img_file in enumerate(img_files):
+            with cols[i % 4]:
+                st.image(img_file, caption=img_file.name, width=120)
+    if doc_files:
+        for doc in doc_files:
+            st.caption(f"📄 {doc.name}")
 
-if prompt := st.chat_input("Digite sua mensagem (pode anexar imagens acima)..."):
+if prompt := st.chat_input("Digite sua mensagem (pode anexar arquivos acima)..."):
     if not api_key:
         st.error("⚠️ API Key da OpenAI não configurada. Defina OPENAI_API_KEY nas variáveis de ambiente.")
         st.stop()
 
-    # Process uploaded images
+    # Process uploaded files
     image_contents = []
-    if uploaded_images:
-        for img_file in uploaded_images:
-            img_bytes = img_file.getvalue()
-            b64 = base64.b64encode(img_bytes).decode("utf-8")
-            ext = img_file.name.rsplit(".", 1)[-1].lower()
-            mime = f"image/{'jpeg' if ext in ('jpg', 'jpeg') else ext}"
-            image_contents.append({"b64": b64, "mime": mime, "name": img_file.name})
+    doc_texts = []
+    if uploaded_files:
+        for ufile in uploaded_files:
+            ext = ufile.name.rsplit(".", 1)[-1].lower()
+            if ext in ("png", "jpg", "jpeg", "gif", "webp"):
+                img_bytes = ufile.getvalue()
+                b64 = base64.b64encode(img_bytes).decode("utf-8")
+                mime = f"image/{'jpeg' if ext in ('jpg', 'jpeg') else ext}"
+                image_contents.append({"b64": b64, "mime": mime, "name": ufile.name})
+            elif ext == "pdf":
+                try:
+                    reader = PdfReader(BytesIO(ufile.getvalue()))
+                    text = "\n".join(page.extract_text() or "" for page in reader.pages)
+                    doc_texts.append({"name": ufile.name, "text": text.strip()})
+                except Exception as e:
+                    doc_texts.append({"name": ufile.name, "text": f"[Erro ao ler PDF: {e}]"})
+            elif ext == "docx":
+                try:
+                    doc = Document(BytesIO(ufile.getvalue()))
+                    text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+                    doc_texts.append({"name": ufile.name, "text": text.strip()})
+                except Exception as e:
+                    doc_texts.append({"name": ufile.name, "text": f"[Erro ao ler DOCX: {e}]"})
+
+    # Build display content
+    file_labels = []
+    if image_contents:
+        file_labels += [f"📎 *{img['name']}*" for img in image_contents]
+    if doc_texts:
+        file_labels += [f"📄 *{doc['name']}*" for doc in doc_texts]
 
     # Append to UI messages
     st.session_state.messages.append({
         "role": "user",
         "content": prompt,
         "images": [{"b64": img["b64"], "name": img["name"]} for img in image_contents] if image_contents else None,
+        "docs": [doc["name"] for doc in doc_texts] if doc_texts else None,
     })
     with st.chat_message("user"):
         if image_contents:
             for img in image_contents:
                 st.image(base64.b64decode(img["b64"]), caption=img["name"], width=300)
+        if doc_texts:
+            for doc in doc_texts:
+                st.caption(f"📄 {doc['name']}")
         st.markdown(prompt)
 
-    # Build OpenAI message content (text + images)
+    # Build OpenAI message content (text + images + doc text)
+    extra_text = ""
+    if doc_texts:
+        for doc in doc_texts:
+            extra_text += f"\n\n--- Conteúdo do arquivo {doc['name']} ---\n{doc['text']}\n--- Fim do arquivo ---"
+
+    full_text = prompt + extra_text
+
     if image_contents:
         user_content = []
         for img in image_contents:
@@ -472,9 +517,9 @@ if prompt := st.chat_input("Digite sua mensagem (pode anexar imagens acima)...")
                 "type": "image_url",
                 "image_url": {"url": f"data:{img['mime']};base64,{img['b64']}"},
             })
-        user_content.append({"type": "text", "text": prompt})
+        user_content.append({"type": "text", "text": full_text})
     else:
-        user_content = prompt
+        user_content = full_text
 
     st.session_state.openai_messages.append({"role": "user", "content": user_content})
 
