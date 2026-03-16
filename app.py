@@ -202,16 +202,16 @@ Data de hoje: {dia} de {mes} de {ano}
 - Assume que o usuário pode não conhecer o padrão Raiz: explica desvios, orienta e propõe correções.
 - Trabalha sempre com confirmação por etapa antes de avançar.
 
-## LEITURA DE IMAGENS
-- O usuário pode enviar imagens (fotos de contratos, documentos, cartões CNPJ, comprovantes etc.).
-- Ao receber uma imagem, extraia TODOS os dados relevantes visíveis (razão social, CNPJ, CPF, endereço, nome, valores, datas, atividades, etc.).
-- Use os dados extraídos para preencher automaticamente as etapas do fluxo de geração.
-- Apresente os dados extraídos de forma organizada e peça confirmação antes de avançar.
-- Se algum dado estiver ilegível ou ausente na imagem, informe claramente e peça ao usuário para complementar.
+## LEITURA DE ARQUIVOS E IMAGENS
+- O usuário pode enviar imagens (fotos de contratos, cartões CNPJ, comprovantes), PDFs ou DOCX.
+- O conteúdo de PDFs e DOCX é extraído automaticamente e aparece como texto na mensagem.
+- Ao receber qualquer arquivo ou imagem, extraia TODOS os dados relevantes (razão social, CNPJ, CPF, endereço, nome, valores, datas, atividades, etc.).
+- Use os dados extraídos para preencher as categorias do contrato.
+- Se algum dado estiver ilegível ou ausente, informe claramente e peça para complementar.
 
 ## MODOS DE ATUAÇÃO
-**A) GERAÇÃO** — gera o contrato do zero seguindo as etapas abaixo.
-**B) REVISÃO/QA** — revisa contrato existente (texto colado ou .docx), lista apontamentos por prioridade: Crítico / Importante / Estético. Não reabre decisões já aprovadas, salvo risco jurídico evidente.
+**A) GERAÇÃO** — gera o contrato coletando dados conforme o fluxo abaixo.
+**B) REVISÃO/QA** — revisa contrato existente (texto colado, PDF ou DOCX), lista apontamentos por prioridade: Crítico / Importante / Estético. Não reabre decisões já aprovadas, salvo risco jurídico evidente.
 
 ## GUARDAS DE COERÊNCIA
 Para qualquer desvio do padrão Raiz:
@@ -220,45 +220,62 @@ Para qualquer desvio do padrão Raiz:
 3. Oriente o caminho correto e proponha a correção
 4. Peça confirmação antes de aplicar
 
-## FLUXO DE GERAÇÃO (seguir em ordem)
+## FLUXO DE GERAÇÃO (modo inteligente)
 
-**Etapa 1 — Cabeçalho CONTRATANTE**
-Pergunte a marca. Consulte a tabela de marcas abaixo. Se a marca tiver múltiplas unidades/CNPJs, liste as opções e peça para o usuário escolher.
-Exiba o cabeçalho completo (razão social, CNPJ, endereço, diretor) e aguarde confirmação.
+O fluxo coleta dados para 6 categorias. O usuário pode fornecer dados de QUALQUER forma:
+- Digitando manualmente (passo a passo)
+- Enviando documentos (PDF, DOCX) com dados da empresa/contratado
+- Enviando imagens (cartão CNPJ, contratos anteriores, comprovantes)
+- Enviando TUDO de uma vez, ou aos poucos
 
-**Etapa 2 — Dados da CONTRATADA**
-Colete: razão social, CNPJ (14 dígitos, formato XX.XXX.XXX/XXXX-XX), endereço completo.
-Valide: CNPJ não pode ser igual ao da CONTRATANTE.
+### Categorias de dados necessários:
 
-**Etapa 3 — Dados do REPRESENTANTE**
-Colete: nome completo, CPF (11 dígitos, formato XXX.XXX.XXX-XX), endereço completo.
+**1. CONTRATANTE** — marca Raiz (determina razão social, CNPJ, endereço, diretor via tabela)
+**2. CONTRATADA** — razão social, CNPJ (14 dígitos, XX.XXX.XXX/XXXX-XX), endereço completo
+**3. REPRESENTANTE** — nome completo, CPF (11 dígitos, XXX.XXX.XXX-XX), endereço completo
+**4. ATIVIDADES** — lista de atividades a serem prestadas
+**5. DATAS E VALORES** — data de início (DD/MM/AAAA), salário mensal (R$ + extenso)
+**6. BENEFÍCIOS / CLÁUSULAS** — checklist de cláusulas opcionais:
+   - Afastamento remunerado (30 dias/ano) — Cláusula 1.3
+   - Plano de saúde + odontológico — Cláusulas 4.1.3 e 4.1.4
+   - Cartão Pluxee R$400/mês — Cláusula 4.1.5
+   - Valor Adicional Anual (1 salário em dezembro) — Cláusula 4.2.1
+   - Valor Adicional Variável (bônus por metas) — Cláusula 4.2.2
+   - Valor Adicional ao Afastamento (1/3 salário; só se afastamento=SIM) — Cláusula 4.2.3
 
-**Etapa 4 — Atividades ({{[ATIVIDADES]}})**
-Aceite texto livre. Formate em lista numerada. Confirme com o usuário.
+### Regras do fluxo:
 
-**Etapa 5 — Datas e Valores**
-- Data de início (DD/MM/AAAA)
-- Salário mensal: valor em R$ X.XXX,XX E por extenso
-- Valide coerência entre o número e o extenso.
+**REGRA 1 — Aceite dados em qualquer ordem e formato.**
+Se o usuário enviar um documento ou imagem, extraia TODOS os dados que conseguir. Se digitar texto livre, interprete e categorize.
 
-**Etapa 6 — Benefícios / Cláusulas Opcionais**
-Consulte o mapa de benefícios abaixo para a marca escolhida.
-Apresente checklist SIM/NÃO para cada cláusula:
-- [ ] Afastamento remunerado (30 dias/ano) — Cláusula 1.3
-- [ ] Plano de saúde + odontológico — Cláusulas 4.1.3 e 4.1.4
-- [ ] Cartão Pluxee R$400/mês — Cláusula 4.1.5
-- [ ] Valor Adicional Anual (1 salário em dezembro) — Cláusula 4.2.1
-- [ ] Valor Adicional Variável (bônus por metas) — Cláusula 4.2.2
-- [ ] Valor Adicional ao Afastamento (1/3 salário; só se afastamento=SIM) — Cláusula 4.2.3
+**REGRA 2 — Após receber dados, apresente um RESUMO ORGANIZADO por categoria.**
+Use esta estrutura:
+✅ **CONTRATANTE**: [marca] — [razão social] — CNPJ [xx] — [endereço]
+✅ **CONTRATADA**: [razão social] — CNPJ [xx] — [endereço]
+✅ **REPRESENTANTE**: [nome] — CPF [xx] — [endereço]
+✅ **ATIVIDADES**: 1. ... 2. ...
+✅ **DATAS/VALORES**: Início [xx] — Salário R$ [xx] ([extenso])
+✅ **BENEFÍCIOS**: [lista]
+Use ✅ para categorias completas e ❌ para categorias com dados faltantes.
 
-Se os benefícios informados diferirem do mapa padrão, aponte a divergência, pergunte o motivo e peça confirmação.
+**REGRA 3 — Pergunte SOMENTE o que falta.**
+Nunca repita perguntas sobre dados já fornecidos e confirmados. Se 4 de 6 categorias estão completas, pergunte apenas as 2 restantes.
 
-**Etapa 7 — Confirmação Final**
-Apresente resumo completo de todos os dados e cláusulas ativas.
-Aguarde o usuário confirmar com "confirmar", "ok", "sim" ou equivalente.
+**REGRA 4 — Se o usuário NÃO enviar dados em massa, conduza passo a passo.**
+Na ausência de documento/dados iniciais, pergunte categoria por categoria na ordem 1→6. Mas se em qualquer momento o usuário enviar múltiplos dados, reorganize e pergunte só o que falta.
 
-**Etapa 8 — Emissão**
-Após confirmação, emita o bloco JSON de geração (ver formato abaixo).
+**REGRA 5 — Confirme por categoria, não por campo individual.**
+Ao apresentar dados extraídos de documentos, peça confirmação de todas as categorias de uma vez. Para dados digitados, confirme cada categoria antes de avançar.
+
+**REGRA 6 — Valide CNPJ da CONTRATADA diferente do da CONTRATANTE.**
+
+**REGRA 7 — Consulte sempre o mapa de benefícios padrão da marca.**
+Se os benefícios informados diferirem do padrão, aponte a divergência e peça confirmação.
+
+**REGRA 8 — Confirmação final obrigatória.**
+Quando TODAS as 6 categorias estiverem completas, apresente o resumo final completo e aguarde confirmação explícita ("confirmar", "ok", "sim") antes de emitir o JSON.
+
+**REGRA 9 — Após confirmação final, emita o bloco JSON** (ver formato abaixo).
 
 ## CLÁUSULAS OPCIONAIS — IDENTIFICADORES
 - `afastamento_remunerado` → Cláusula 1.3
@@ -410,88 +427,74 @@ if not st.session_state.messages:
         if "Gerar" in mode:
             welcome = (
                 "Olá! Sou o **Assistente Contratual Raiz** 👋\n\n"
-                "Vou guiá-lo(a) passo a passo na geração de um contrato PJ padrão Raiz.\n\n"
-                "Para começar: **qual é a marca da CONTRATANTE?**\n\n"
-                "*(Ex.: HOLDING, QI, PRO RAIZ, CUBO GLOBAL, APOGEU...)*\n\n"
-                "💡 *Você pode anexar imagens, PDFs ou DOCX junto com sua mensagem.*"
+                "Vou ajudá-lo(a) na geração de um contrato PJ padrão Raiz.\n\n"
+                "Você pode:\n"
+                "- **Enviar um documento** (PDF, DOCX ou imagem) com os dados do contratado — "
+                "eu extraio tudo e pergunto só o que faltar\n"
+                "- **Digitar as informações** passo a passo — eu guio você em cada etapa\n\n"
+                "Para começar, envie os dados ou me diga a **marca da CONTRATANTE**.\n\n"
+                "💡 *Use o 📎 ao lado da caixa de mensagem para anexar arquivos.*"
             )
         else:
             welcome = (
                 "Olá! Sou o **Assistente Contratual Raiz** 👋\n\n"
                 "Modo **Revisão / QA** ativo.\n\n"
-                "Cole aqui o texto do contrato que deseja revisar, ou descreva o que precisa verificar.\n\n"
-                "💡 *Você pode anexar imagens, PDFs ou DOCX de contratos para análise.*"
+                "Cole o texto do contrato, ou envie o arquivo (PDF, DOCX ou imagem) para análise.\n\n"
+                "💡 *Use o 📎 ao lado da caixa de mensagem para anexar arquivos.*"
             )
         st.markdown(welcome)
 
 # ─── API key (loaded from environment, no user input needed) ──────────────────
 api_key = os.getenv("OPENAI_API_KEY", "")
 
-# ─── Pending attachments (session state) ─────────────────────────────────────
-if "pending_images" not in st.session_state:
-    st.session_state.pending_images = []
-if "pending_docs" not in st.session_state:
-    st.session_state.pending_docs = []
-
-# ─── File uploader + Chat input ──────────────────────────────────────────────
-uploaded_files = st.file_uploader(
-    "📎 Anexar arquivos",
-    type=["png", "jpg", "jpeg", "gif", "webp", "pdf", "docx"],
-    accept_multiple_files=True,
-    key="file_uploader",
-    label_visibility="collapsed",
+# ─── Chat input with integrated file upload ──────────────────────────────────
+result = st.chat_input(
+    "Digite sua mensagem ou anexe arquivos...",
+    accept_file="multiple",
+    file_type=["png", "jpg", "jpeg", "gif", "webp", "pdf", "docx"],
 )
 
-# Process files immediately on upload and store in session_state
-if uploaded_files:
-    new_images = []
-    new_docs = []
-    for ufile in uploaded_files:
+if result:
+    prompt = result.text or ""
+    attached_files = result["files"] if result["files"] else []
+
+    if not api_key:
+        st.error("⚠️ API Key da OpenAI não configurada. Defina OPENAI_API_KEY nas variáveis de ambiente.")
+        st.stop()
+
+    # Process attached files
+    image_contents = []
+    doc_texts = []
+    for ufile in attached_files:
         ext = ufile.name.rsplit(".", 1)[-1].lower()
         if ext in ("png", "jpg", "jpeg", "gif", "webp"):
             img_bytes = ufile.getvalue()
             b64 = base64.b64encode(img_bytes).decode("utf-8")
             mime = f"image/{'jpeg' if ext in ('jpg', 'jpeg') else ext}"
-            new_images.append({"b64": b64, "mime": mime, "name": ufile.name})
+            image_contents.append({"b64": b64, "mime": mime, "name": ufile.name})
         elif ext == "pdf":
             try:
                 reader = PdfReader(BytesIO(ufile.getvalue()))
                 text = "\n".join(page.extract_text() or "" for page in reader.pages)
-                new_docs.append({"name": ufile.name, "text": text.strip()})
+                doc_texts.append({"name": ufile.name, "text": text.strip()})
             except Exception as e:
-                new_docs.append({"name": ufile.name, "text": f"[Erro ao ler PDF: {e}]"})
+                doc_texts.append({"name": ufile.name, "text": f"[Erro ao ler PDF: {e}]"})
         elif ext == "docx":
             try:
                 doc = Document(BytesIO(ufile.getvalue()))
                 text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
-                new_docs.append({"name": ufile.name, "text": text.strip()})
+                doc_texts.append({"name": ufile.name, "text": text.strip()})
             except Exception as e:
-                new_docs.append({"name": ufile.name, "text": f"[Erro ao ler DOCX: {e}]"})
-    st.session_state.pending_images = new_images
-    st.session_state.pending_docs = new_docs
-else:
-    st.session_state.pending_images = []
-    st.session_state.pending_docs = []
+                doc_texts.append({"name": ufile.name, "text": f"[Erro ao ler DOCX: {e}]"})
 
-# Show preview of pending attachments
-if st.session_state.pending_images:
-    cols = st.columns(min(len(st.session_state.pending_images), 4))
-    for i, img in enumerate(st.session_state.pending_images):
-        with cols[i % 4]:
-            st.image(base64.b64decode(img["b64"]), caption=img["name"], width=120)
-if st.session_state.pending_docs:
-    for doc in st.session_state.pending_docs:
-        preview = doc["text"][:200] + "..." if len(doc["text"]) > 200 else doc["text"]
-        st.success(f"📄 **{doc['name']}** — {len(doc['text'])} caracteres extraídos")
-
-if prompt := st.chat_input("Digite sua mensagem (pode anexar arquivos acima)..."):
-    if not api_key:
-        st.error("⚠️ API Key da OpenAI não configurada. Defina OPENAI_API_KEY nas variáveis de ambiente.")
+    # Guard: require at least text or files
+    if not prompt and not image_contents and not doc_texts:
         st.stop()
 
-    # Grab processed attachments from session_state
-    image_contents = list(st.session_state.pending_images)
-    doc_texts = list(st.session_state.pending_docs)
+    # Auto-generate prompt if user sent only files without text
+    if not prompt and (image_contents or doc_texts):
+        file_names = [img["name"] for img in image_contents] + [doc["name"] for doc in doc_texts]
+        prompt = f"Analise os dados dos arquivos enviados: {', '.join(file_names)}"
 
     # Append to UI messages
     st.session_state.messages.append({
