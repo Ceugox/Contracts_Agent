@@ -427,6 +427,12 @@ if not st.session_state.messages:
 # ─── API key (loaded from environment, no user input needed) ──────────────────
 api_key = os.getenv("OPENAI_API_KEY", "")
 
+# ─── Pending attachments (session state) ─────────────────────────────────────
+if "pending_images" not in st.session_state:
+    st.session_state.pending_images = []
+if "pending_docs" not in st.session_state:
+    st.session_state.pending_docs = []
+
 # ─── File uploader + Chat input ──────────────────────────────────────────────
 uploaded_files = st.file_uploader(
     "📎 Anexar arquivos",
@@ -436,55 +442,56 @@ uploaded_files = st.file_uploader(
     label_visibility="collapsed",
 )
 
+# Process files immediately on upload and store in session_state
 if uploaded_files:
-    img_files = [f for f in uploaded_files if f.name.rsplit(".", 1)[-1].lower() in ("png", "jpg", "jpeg", "gif", "webp")]
-    doc_files = [f for f in uploaded_files if f.name.rsplit(".", 1)[-1].lower() in ("pdf", "docx")]
-    if img_files:
-        cols = st.columns(min(len(img_files), 4))
-        for i, img_file in enumerate(img_files):
-            with cols[i % 4]:
-                st.image(img_file, caption=img_file.name, width=120)
-    if doc_files:
-        for doc in doc_files:
-            st.caption(f"📄 {doc.name}")
+    new_images = []
+    new_docs = []
+    for ufile in uploaded_files:
+        ext = ufile.name.rsplit(".", 1)[-1].lower()
+        if ext in ("png", "jpg", "jpeg", "gif", "webp"):
+            img_bytes = ufile.getvalue()
+            b64 = base64.b64encode(img_bytes).decode("utf-8")
+            mime = f"image/{'jpeg' if ext in ('jpg', 'jpeg') else ext}"
+            new_images.append({"b64": b64, "mime": mime, "name": ufile.name})
+        elif ext == "pdf":
+            try:
+                reader = PdfReader(BytesIO(ufile.getvalue()))
+                text = "\n".join(page.extract_text() or "" for page in reader.pages)
+                new_docs.append({"name": ufile.name, "text": text.strip()})
+            except Exception as e:
+                new_docs.append({"name": ufile.name, "text": f"[Erro ao ler PDF: {e}]"})
+        elif ext == "docx":
+            try:
+                doc = Document(BytesIO(ufile.getvalue()))
+                text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
+                new_docs.append({"name": ufile.name, "text": text.strip()})
+            except Exception as e:
+                new_docs.append({"name": ufile.name, "text": f"[Erro ao ler DOCX: {e}]"})
+    st.session_state.pending_images = new_images
+    st.session_state.pending_docs = new_docs
+else:
+    st.session_state.pending_images = []
+    st.session_state.pending_docs = []
+
+# Show preview of pending attachments
+if st.session_state.pending_images:
+    cols = st.columns(min(len(st.session_state.pending_images), 4))
+    for i, img in enumerate(st.session_state.pending_images):
+        with cols[i % 4]:
+            st.image(base64.b64decode(img["b64"]), caption=img["name"], width=120)
+if st.session_state.pending_docs:
+    for doc in st.session_state.pending_docs:
+        preview = doc["text"][:200] + "..." if len(doc["text"]) > 200 else doc["text"]
+        st.success(f"📄 **{doc['name']}** — {len(doc['text'])} caracteres extraídos")
 
 if prompt := st.chat_input("Digite sua mensagem (pode anexar arquivos acima)..."):
     if not api_key:
         st.error("⚠️ API Key da OpenAI não configurada. Defina OPENAI_API_KEY nas variáveis de ambiente.")
         st.stop()
 
-    # Process uploaded files
-    image_contents = []
-    doc_texts = []
-    if uploaded_files:
-        for ufile in uploaded_files:
-            ext = ufile.name.rsplit(".", 1)[-1].lower()
-            if ext in ("png", "jpg", "jpeg", "gif", "webp"):
-                img_bytes = ufile.getvalue()
-                b64 = base64.b64encode(img_bytes).decode("utf-8")
-                mime = f"image/{'jpeg' if ext in ('jpg', 'jpeg') else ext}"
-                image_contents.append({"b64": b64, "mime": mime, "name": ufile.name})
-            elif ext == "pdf":
-                try:
-                    reader = PdfReader(BytesIO(ufile.getvalue()))
-                    text = "\n".join(page.extract_text() or "" for page in reader.pages)
-                    doc_texts.append({"name": ufile.name, "text": text.strip()})
-                except Exception as e:
-                    doc_texts.append({"name": ufile.name, "text": f"[Erro ao ler PDF: {e}]"})
-            elif ext == "docx":
-                try:
-                    doc = Document(BytesIO(ufile.getvalue()))
-                    text = "\n".join(p.text for p in doc.paragraphs if p.text.strip())
-                    doc_texts.append({"name": ufile.name, "text": text.strip()})
-                except Exception as e:
-                    doc_texts.append({"name": ufile.name, "text": f"[Erro ao ler DOCX: {e}]"})
-
-    # Build display content
-    file_labels = []
-    if image_contents:
-        file_labels += [f"📎 *{img['name']}*" for img in image_contents]
-    if doc_texts:
-        file_labels += [f"📄 *{doc['name']}*" for doc in doc_texts]
+    # Grab processed attachments from session_state
+    image_contents = list(st.session_state.pending_images)
+    doc_texts = list(st.session_state.pending_docs)
 
     # Append to UI messages
     st.session_state.messages.append({
