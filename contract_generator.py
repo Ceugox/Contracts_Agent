@@ -5,7 +5,10 @@ Fills the template .docx with variable data and handles optional clauses.
 
 from docx import Document
 from io import BytesIO
+import os
 import re
+import subprocess
+import tempfile
 
 # Maps the clause identifier (prefix inside {{ }}) to the data key
 OPTIONAL_CLAUSE_MAP = {
@@ -183,3 +186,35 @@ def generate_contract(data: dict, template_path: str) -> bytes:
     doc.save(output)
     output.seek(0)
     return output.getvalue()
+
+
+def convert_docx_to_pdf(docx_bytes: bytes) -> bytes | None:
+    """Convert DOCX bytes to PDF using LibreOffice headless mode."""
+    try:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            docx_path = os.path.join(tmpdir, "contract.docx")
+            with open(docx_path, "wb") as f:
+                f.write(docx_bytes)
+
+            subprocess.run(
+                [
+                    "libreoffice",
+                    "--headless",
+                    "--norestore",
+                    "--convert-to",
+                    "pdf",
+                    "--outdir",
+                    tmpdir,
+                    docx_path,
+                ],
+                capture_output=True,
+                timeout=60,
+            )
+
+            pdf_path = os.path.join(tmpdir, "contract.pdf")
+            if os.path.exists(pdf_path):
+                with open(pdf_path, "rb") as f:
+                    return f.read()
+        return None
+    except Exception:
+        return None

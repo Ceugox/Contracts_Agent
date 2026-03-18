@@ -18,7 +18,7 @@ from dotenv import load_dotenv
 from PyPDF2 import PdfReader
 from docx import Document
 
-from contract_generator import generate_contract
+from contract_generator import generate_contract, convert_docx_to_pdf
 
 load_dotenv()
 
@@ -396,18 +396,32 @@ if "openai_messages" not in st.session_state:
     st.session_state.openai_messages = []
 if "generated_contract" not in st.session_state:
     st.session_state.generated_contract = None
+if "generated_contract_pdf" not in st.session_state:
+    st.session_state.generated_contract_pdf = None
 
-# Download button (shown when contract is ready)
+# Download buttons (shown when contract is ready)
 if st.session_state.generated_contract:
-    filename = f"Contrato_PJ_{datetime.now().strftime('%Y%m%d_%H%M%S')}.docx"
-    st.download_button(
-        label="⬇️ Baixar Contrato (.docx)",
-        data=st.session_state.generated_contract,
-        file_name=filename,
-        mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
-        use_container_width=True,
-        type="primary",
-    )
+    filename_base = f"Contrato_PJ_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
+    col1, col2 = st.columns(2)
+    with col1:
+        st.download_button(
+            label="⬇️ Baixar Contrato (.docx)",
+            data=st.session_state.generated_contract,
+            file_name=f"{filename_base}.docx",
+            mime="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+            use_container_width=True,
+            type="primary",
+        )
+    with col2:
+        if st.session_state.generated_contract_pdf:
+            st.download_button(
+                label="⬇️ Baixar Contrato (.pdf)",
+                data=st.session_state.generated_contract_pdf,
+                file_name=f"{filename_base}.pdf",
+                mime="application/pdf",
+                use_container_width=True,
+                type="primary",
+            )
     st.divider()
 
 # Display conversation history
@@ -569,10 +583,13 @@ if result:
                         )
                         st.session_state.generated_contract = contract_bytes
 
+                        pdf_bytes = convert_docx_to_pdf(contract_bytes)
+                        st.session_state.generated_contract_pdf = pdf_bytes
+
                         display_text = response_text[: match.start()].strip()
                         display_text += (
                             "\n\n✅ **Contrato gerado com sucesso!** "
-                            "Clique no botão de download no topo da página para baixar o arquivo .docx."
+                            "Clique nos botões de download no topo da página para baixar o arquivo."
                         )
                         st.markdown(display_text)
                         st.session_state.messages.append(
